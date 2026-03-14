@@ -47,5 +47,5 @@ variable "node_count" {
 variable "node_size" {
   description = "AKS VM size"
   type        = string
-  default     = "Standard_DC2s_v3"
+  default     = "Standard_D2s_v3"
 }
