@@ -21,7 +21,7 @@ jobs:
       - run: terraform validate
 
   deploy-homolog:
-    if: github.event_name == 'push' && github.ref_name == 'homolog'
+    if: github.event_name != 'pull_request' && github.ref_name == 'homolog'
     needs: validate
     runs-on: ubuntu-latest
     environment: homolog
@@ -71,6 +71,31 @@ jobs:
           access_key           = "${STORAGE_KEY}"
           EOF
       - run: terraform init -reconfigure -backend-config=backend.hcl
+      - name: Import existing resources into Terraform state
+        shell: bash
+        env:
+          SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          RG_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/mechcraft-rg"
+          VNET_ID="${RG_ID}/providers/Microsoft.Network/virtualNetworks/mechcraft-vnet"
+          SUBNET_ID="${VNET_ID}/subnets/mechcraft-aks-subnet"
+          AKS_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/mechcraft-rg/providers/Microsoft.ContainerService/managedClusters/mechcraft-aks"
+
+          if az group show --name mechcraft-rg >/dev/null 2>&1; then
+            terraform state show azurerm_resource_group.this >/dev/null 2>&1 || terraform import azurerm_resource_group.this "${RG_ID}"
+
+            if az network vnet show --resource-group mechcraft-rg --name mechcraft-vnet >/dev/null 2>&1; then
+              terraform state show azurerm_virtual_network.this >/dev/null 2>&1 || terraform import azurerm_virtual_network.this "${VNET_ID}"
+            fi
+
+            if az network vnet subnet show --resource-group mechcraft-rg --vnet-name mechcraft-vnet --name mechcraft-aks-subnet >/dev/null 2>&1; then
+              terraform state show azurerm_subnet.aks >/dev/null 2>&1 || terraform import azurerm_subnet.aks "${SUBNET_ID}"
+            fi
+
+            if az aks show --resource-group mechcraft-rg --name mechcraft-aks >/dev/null 2>&1; then
+              terraform state show azurerm_kubernetes_cluster.this >/dev/null 2>&1 || terraform import azurerm_kubernetes_cluster.this "${AKS_ID}"
+            fi
+          fi
       - run: terraform plan -out=tfplan
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -81,7 +106,7 @@ jobs:
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
 
   deploy-production:
-    if: github.event_name == 'push' && github.ref_name == 'main'
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
     needs: validate
     runs-on: ubuntu-latest
     environment: production
@@ -131,6 +156,31 @@ jobs:
           access_key           = "${STORAGE_KEY}"
           EOF
       - run: terraform init -reconfigure -backend-config=backend.hcl
+      - name: Import existing resources into Terraform state
+        shell: bash
+        env:
+          SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          RG_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/mechcraft-rg"
+          VNET_ID="${RG_ID}/providers/Microsoft.Network/virtualNetworks/mechcraft-vnet"
+          SUBNET_ID="${VNET_ID}/subnets/mechcraft-aks-subnet"
+          AKS_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/mechcraft-rg/providers/Microsoft.ContainerService/managedClusters/mechcraft-aks"
+
+          if az group show --name mechcraft-rg >/dev/null 2>&1; then
+            terraform state show azurerm_resource_group.this >/dev/null 2>&1 || terraform import azurerm_resource_group.this "${RG_ID}"
+
+            if az network vnet show --resource-group mechcraft-rg --name mechcraft-vnet >/dev/null 2>&1; then
+              terraform state show azurerm_virtual_network.this >/dev/null 2>&1 || terraform import azurerm_virtual_network.this "${VNET_ID}"
+            fi
+
+            if az network vnet subnet show --resource-group mechcraft-rg --vnet-name mechcraft-vnet --name mechcraft-aks-subnet >/dev/null 2>&1; then
+              terraform state show azurerm_subnet.aks >/dev/null 2>&1 || terraform import azurerm_subnet.aks "${SUBNET_ID}"
+            fi
+
+            if az aks show --resource-group mechcraft-rg --name mechcraft-aks >/dev/null 2>&1; then
+              terraform state show azurerm_kubernetes_cluster.this >/dev/null 2>&1 || terraform import azurerm_kubernetes_cluster.this "${AKS_ID}"
+            fi
+          fi
       - run: terraform plan -out=tfplan
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
